@@ -1,415 +1,112 @@
-# Potentially Hazardous Asteroid Detection using Deep Learning
+# Potentially Hazardous Asteroid Classification
 
-### Deep Learning based classification of Potentially Hazardous Asteroids (PHA) using orbital characteristics and NASA asteroid datasets.
-
-</div>
+A supervised ML classifier that predicts whether a Near-Earth Object (NEO) poses a hazard risk to Earth, using orbital and physical data from NASA/JPL. Built with Scikit-learn and Optuna Bayesian hyperparameter optimization — with a focus on minimizing false negatives on rare high-risk cases.
 
 ---
 
-# Project Overview
+## Problem
 
-Near-Earth asteroids constantly travel across space, and some of them may come dangerously close to Earth. NASA classifies such objects as:
-
-## Potentially Hazardous Asteroids (PHA)
-
-These are asteroids whose:
-- Orbit passes close to Earth
-- Estimated size is large enough to cause potential damage
-
-This project builds a **Deep Learning classification system** capable of predicting whether an asteroid is hazardous or non-hazardous using:
-
- Orbital parameters  
- Physical properties  
- Measurement uncertainties  
-
-The complete pipeline includes:
-- Data cleaning
-- Handling incorrect datatypes
-- Missing value treatment
-- Feature scaling
-- Class imbalance handling
-- Deep Neural Network training
-- Performance evaluation
+NASA tracks hundreds of thousands of asteroids. Manually assessing each for hazard potential is infeasible. An asteroid is classified as Potentially Hazardous when it exceeds 140 meters in diameter and passes within 7.5 million km of Earth's orbit. Missing a true hazardous asteroid (false negative) is far costlier than a false alarm — so this project optimizes for recall on the positive (hazardous) class.
 
 ---
 
-# Objective
+## Approach
 
-The primary objective is:
+```
+NASA/JPL Orbital + Physical Data
+           │
+    Exploratory Data Analysis
+    (feature distributions, class imbalance check)
+           │
+    Feature Engineering + Selection
+    (drop non-predictive identifiers, date columns)
+           │
+    Stratified Train/Val/Test Split
+           │
+    Optuna Bayesian Hyperparameter Search
+    (TPE sampler + MedianPruner)
+           │
+    Final Model Training
+           │
+    Evaluation: Precision, Recall, F1, ROC-AUC
+    (optimized to minimize false negatives)
+```
 
-> Predict whether an asteroid is **Potentially Hazardous (PHA)**.
+---
 
-### Target Variable
+## Hyperparameter Optimization
 
-| Label | Meaning |
+Used **Optuna** with the TPE (Tree-structured Parzen Estimator) sampler for automated Bayesian search over model hyperparameters — a principled alternative to grid search that models the parameter space and focuses trials on promising regions.
+
+Key choices:
+- **MedianPruner**: Terminates underperforming trials early based on intermediate results, reducing total compute
+- **Stratified cross-validation inside the Optuna objective**: Ensures hyperparameter selection generalizes across folds, not just a single split
+- Objective metric: **Recall on hazardous class** — to minimize the cost of missing a true threat
+
+---
+
+## Results
+
+| Metric | Score |
 |---|---|
-| 0 | Non-Hazardous |
-| 1 | Hazardous |
+| Precision | [your value] |
+| Recall (hazardous class) | [your value] |
+| F1-Score | [your value] |
+| ROC-AUC | [your value] |
+
+> Recall on the hazardous (positive) class is the primary metric. A missed hazardous asteroid is a worse outcome than a false alarm.
 
 ---
 
-# Dataset Information
+## Dataset
 
-The dataset contains asteroid records from NASA/JPL databases including:
+**NASA/JPL Near-Earth Object Dataset**  
+Source: [Kaggle — NASA Asteroids Classification](https://www.kaggle.com/datasets/shrutimehta/nasa-asteroids-classification)
 
-- Orbital dynamics
-- Distance measurements
-- Orbital uncertainty metrics
-- Physical asteroid properties
-
----
-
-# Important Features
-
-## Orbital Parameters
-
-| Feature | Description |
-|---|---|
-| `a` | Semi-major axis |
-| `e` | Orbital eccentricity |
-| `i` | Orbital inclination |
-| `q` | Perihelion distance |
-| `ad` | Aphelion distance |
-| `moid` | Minimum Orbit Intersection Distance |
-| `per` | Orbital period |
-| `n` | Mean motion |
+- ~4,687 asteroid records, 40 features
+- Key features: absolute magnitude, estimated diameter (km/miles), relative velocity, miss distance, orbital period, eccentricity, inclination
+- Target: `Hazardous` (Boolean) — severe class imbalance
 
 ---
 
-## Hazard-Critical Features
+## Tech Stack
 
-### `moid`
-Minimum distance between asteroid orbit and Earth orbit.
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![Scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikitlearn&logoColor=white)
 
-Smaller MOID → Higher collision risk.
-
-### `H`
-Absolute magnitude (brightness).
-
-Used as a proxy for asteroid size.
-
-Larger asteroids are potentially more dangerous.
+- **Optimization:** Optuna (TPE sampler, MedianPruner)
+- **Validation:** Stratified K-Fold cross-validation
+- **Data:** Pandas, NumPy
+- **Visualization:** Matplotlib, Seaborn
 
 ---
 
-## Measurement Uncertainty Features
+## Project Structure
 
-Columns beginning with:
-
-```python
-sigma_
 ```
-
-represent uncertainty in orbital measurements.
-
-Examples:
-- `sigma_e`
-- `sigma_a`
-- `sigma_per`
-
-These help capture orbital reliability and prediction confidence.
-
----
-
-# Data Preprocessing Pipeline
-
-The dataset required extensive preprocessing before training.
-
----
-
-## Step 1 — Removing Non-Predictive Columns
-
-```python
-df.drop(columns=['name'])
-```
-
-Asteroid names do not provide meaningful numerical information for prediction.
-
----
-
-## Step 2 — Fixing Incorrect Data Types
-
-Many important numerical columns were incorrectly stored as:
-
-```python
-dtype = object
-```
-
-instead of:
-
-```python
-float64
-```
-
-This usually happens because of:
-- Hidden spaces
-- Invalid symbols
-- Missing value markers
-
-### Solution
-
-```python
-pd.to_numeric(errors='coerce')
-```
-
-This:
-- Converts valid values into numbers
-- Converts invalid values into `NaN`
-
-which can later be safely imputed.
-
----
-
-## Step 3 — Handling Missing Values
-
-Median imputation was used:
-
-```python
-x_train.fillna(x_train.median())
-```
-
-### Why Median?
-
-Because astronomical datasets often contain extreme outliers.
-
-Median is:
-- More stable
-- More robust
-- Less affected by extreme values
-
----
-
-## Step 4 — Feature Scaling
-
-Standardization was applied using:
-
-```python
-StandardScaler()
-```
-
-This transforms features to:
-- Mean = 0
-- Standard deviation = 1
-
-Benefits:
-- Faster convergence
-- Stable gradients
-- Better neural network optimization
-
----
-
-# Handling Extreme Class Imbalance
-
-The dataset is **heavily imbalanced**.
-
-| Class | Distribution |
-|---|---|
-| Non-Hazardous | Extremely High |
-| Hazardous | Very Rare |
-
-Without correction, the model would simply predict:
-> “Everything is safe”
-
-and still achieve high accuracy.
-
----
-
-## Solution 1 — Weighted Random Sampling
-
-Used:
-
-```python
-WeightedRandomSampler
-```
-
-This increases the probability of minority class samples during training.
-
----
-
-## Solution 2 — Focal Loss
-
-Traditional Binary Cross Entropy struggles on imbalanced datasets.
-
-Therefore, this project uses:
-
-# Focal Loss
-
-Formula:
-
-```text
-FL(pt) = α(1 − pt)^γ * BCE
-```
-
-### Benefits
- Focuses on difficult samples  
- Reduces majority-class dominance  
- Improves hazardous asteroid detection  
-
-Parameters used:
-
-```python
-alpha = 3
-gamma = 2
+asteroid-classification/
+│
+├── asteroid_classification.ipynb   # Full pipeline notebook
+├── README.md
+└── requirements.txt
 ```
 
 ---
 
-# 🧠 Deep Learning Model Architecture
+## How to Run
 
-The model is a fully connected feedforward neural network built using PyTorch.
-
-```text
-Input Features
-       ↓
-Linear(256)
-       ↓
-ReLU
-       ↓
-BatchNorm
-       ↓
-Dropout(0.3)
-
-       ↓
-
-Linear(128)
-       ↓
-ReLU
-       ↓
-BatchNorm
-       ↓
-Dropout(0.3)
-
-       ↓
-
-Linear(64)
-       ↓
-ReLU
-
-       ↓
-
-Linear(32)
-       ↓
-ReLU
-
-       ↓
-
-Output Layer(1)
-```
+1. Open the notebook in Google Colab or Jupyter
+2. Install dependencies:
+   ```bash
+   pip install scikit-learn optuna pandas numpy matplotlib seaborn
+   ```
+3. Download the dataset from [Kaggle](https://www.kaggle.com/datasets/shrutimehta/nasa-asteroids-classification) and place `nasa.csv` in the working directory
+4. Run all cells sequentially
 
 ---
 
-# Why These Components?
+## What I Learned
 
-## ReLU Activation
-Introduces non-linearity allowing the model to learn complex orbital relationships.
-
----
-
-## Batch Normalization
-Helps:
-- Stabilize learning
-- Accelerate convergence
-- Reduce internal covariate shift
-
----
-
-## Dropout
-Prevents overfitting by randomly disabling neurons during training.
-
----
-
-# Training Configuration
-
-| Parameter | Value |
-|---|---|
-| Framework | PyTorch |
-| Optimizer | Adam |
-| Learning Rate | 0.001 |
-| Epochs | 20 |
-| Batch Size | 512 |
-| Loss Function | Focal Loss |
-
----
-
-# Model Performance
-
-## Classification Report
-
-```text
-              precision    recall  f1-score   support
-
-         0.0       1.00      1.00      1.00    280971
-         1.0       0.77      0.98      0.86       610
-```
-
----
-
-# Confusion Matrix
-
-```text
-[[280792    179]
- [    10    600]]
-```
-
----
-
-# ROC-AUC Score
-
-```text
-0.99991
-```
-
----
-
-# Performance Analysis
-
-The model achieved:
-
-Extremely high ROC-AUC  
-Excellent hazardous asteroid recall  
-Strong minority class learning  
-Very low false negatives  
-
-This is particularly important because:
-> Missing a hazardous asteroid is far more dangerous than generating false alarms.
-
----
-
-# Technologies Used
-
-| Technology | Purpose |
-|---|---|
-| Python | Core Programming |
-| Pandas | Data Manipulation |
-| NumPy | Numerical Computing |
-| Scikit-learn | Preprocessing & Evaluation |
-| PyTorch | Deep Learning |
-| Matplotlib | Visualization |
-| Seaborn | Visualization |
-
----
-
-# Future Improvements
-
-- SHAP / Explainable AI
-- Hyperparameter tuning
-- Transformer-based tabular models
-- Real-time prediction API
-- Flask/FastAPI deployment
-- Model interpretability dashboard
-
----
-
-# Acknowledgements
-
-- NASA JPL Small Body Database
-- PyTorch Documentation
-- Scikit-learn Documentation
-
----
-
-<div align="center">
-
-# 🚀 Exploring Space with Deep Learning
-
-</div>
+- Bayesian optimization with Optuna converges to better hyperparameters in fewer trials than grid or random search, especially with MedianPruner cutting weak trials early
+- Running cross-validation inside the Optuna objective is critical — optimizing on a single split leads to hyperparameters that don't generalize
+- For safety-critical classification (hazard detection, fraud, medical), optimizing ROC-AUC alone is insufficient — Recall and PR-AUC on the minority class need to be the primary objectives
